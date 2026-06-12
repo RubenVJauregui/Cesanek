@@ -125,7 +125,7 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const customerCount = getCount(customerResult);
+    const customerCount = Math.min(getCount(customerResult), 300);
     const isTenantWide = !!(customerResult && typeof customerResult === "object" && (customerResult as Record<string, unknown>)._tenantWide);
 
     // Collect all customer IDs for name resolution

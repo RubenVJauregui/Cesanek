@@ -73,7 +73,7 @@ async function fetchAllPages(
   token: string,
   url: string,
   body: Record<string, unknown>,
-  maxRows = 300
+  maxRows = 1000
 ): Promise<{ list: Record<string, unknown>[]; totalCount: number }> {
   const pageSize = Math.min(maxRows, 200);
   const firstRes = await fetch(url, {
@@ -87,11 +87,11 @@ async function fetchAllPages(
   const firstList: Record<string, unknown>[] = firstJson?.data?.list || [];
 
   if (firstList.length >= totalCount || firstList.length >= maxRows) {
-    return { list: firstList.slice(0, maxRows), totalCount };
+    return { list: firstList.slice(0, maxRows), totalCount: Math.min(totalCount, maxRows) };
   }
 
   const allRows = [...firstList];
-  const totalPages = Math.min(Math.ceil(Math.min(totalCount, maxRows) / pageSize), 5);
+  const totalPages = Math.min(Math.ceil(Math.min(totalCount, maxRows) / pageSize), 10);
   for (let page = 2; page <= totalPages && allRows.length < maxRows; page++) {
     const res = await fetch(url, {
       method: "POST",
@@ -101,9 +101,11 @@ async function fetchAllPages(
     if (!res.ok) break;
     const json = await res.json();
     const list = json?.data?.list || [];
+    if (list.length === 0) break;
     allRows.push(...list);
   }
-  return { list: allRows.slice(0, maxRows), totalCount };
+  const finalList = allRows.slice(0, maxRows);
+  return { list: finalList, totalCount: finalList.length };
 }
 
 export async function POST(req: NextRequest) {
