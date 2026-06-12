@@ -184,7 +184,7 @@ export async function POST(req: NextRequest) {
         status: c.status || "—",
         code: c.customerCode || c.code || "—",
       }));
-      return NextResponse.json({ success: true, data: { rows, total: totalCount, tenantWide: true } });
+      return NextResponse.json({ success: true, data: { rows, total: rows.length, tenantWide: true } });
     }
 
     if (kpi === "plannedFTL") {
@@ -205,7 +205,7 @@ export async function POST(req: NextRequest) {
         poNo: o.poNo || "—",
         createdTime: o.createdTime || o.orderedDate || "",
       }));
-      return NextResponse.json({ success: true, data: { rows, total: totalCount } });
+      return NextResponse.json({ success: true, data: { rows, total: rows.length } });
     }
 
     if (kpi === "olderThan48h") {
@@ -226,7 +226,7 @@ export async function POST(req: NextRequest) {
         carrier: o.carrierName || o.carrierId || "—",
         orderedDate: o.orderedDate || o.createdTime || "",
       }));
-      return NextResponse.json({ success: true, data: { rows, total: totalCount } });
+      return NextResponse.json({ success: true, data: { rows, total: rows.length } });
     }
 
     if (kpi === "ecommOrders") {
@@ -246,7 +246,7 @@ export async function POST(req: NextRequest) {
         carrier: o.carrierName || o.carrierId || "—",
         shipNoLaterDate: o.shipNoLaterDate || "—",
       }));
-      return NextResponse.json({ success: true, data: { rows, total: totalCount } });
+      return NextResponse.json({ success: true, data: { rows, total: rows.length } });
     }
 
     if (kpi === "ecommPastSLA") {
@@ -268,7 +268,7 @@ export async function POST(req: NextRequest) {
         shipNoLaterDate: o.shipNoLaterDate || "—",
         createdTime: o.createdTime || "",
       }));
-      return NextResponse.json({ success: true, data: { rows, total: totalCount } });
+      return NextResponse.json({ success: true, data: { rows, total: rows.length } });
     }
 
     return NextResponse.json({ error: "Unknown KPI" }, { status: 400 });

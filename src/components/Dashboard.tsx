@@ -196,7 +196,32 @@ export default function Dashboard() {
       }
       const result = await res.json();
       if (result.success) {
-        setData(result.data);
+        const dashboardData = result.data;
+        const KPI_KEYS = ["inYardFull", "customers", "plannedFTL", "olderThan48h", "ecommOrders", "ecommPastSLA"] as const;
+        const detailTotals: Partial<KPIs> = {};
+        await Promise.all(KPI_KEYS.map(async (kpi) => {
+          try {
+            const detailRes = await fetch("/api/kpi-detail", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ token, kpi }),
+            });
+            if (!detailRes.ok) return;
+            const detailJson = await detailRes.json();
+            if (!detailJson.success) return;
+            const total = detailJson.data.total ?? detailJson.data.rows?.length ?? 0;
+            (detailTotals as Record<string, number | boolean>)[kpi] = total;
+            if (kpi === "customers") {
+              (detailTotals as Record<string, number | boolean>).customersTenantWide = !!detailJson.data.tenantWide;
+            }
+          } catch {
+            // Keep dashboard value if a detail total cannot be loaded.
+          }
+        }));
+        setData({
+          ...dashboardData,
+          kpis: { ...dashboardData.kpis, ...detailTotals },
+        });
         setLastUpdated(new Date());
         setNextRefresh(10);
       }
@@ -279,9 +304,17 @@ export default function Dashboard() {
       if (res.ok) {
         const result = await res.json();
         if (result.success) {
-          setKpiRows(result.data.rows);
-          setKpiTotal(result.data.total);
+          const rows = result.data.rows || [];
+          const total = result.data.total ?? rows.length;
+          setKpiRows(rows);
+          setKpiTotal(total);
           setKpiTenantWide(!!result.data.tenantWide);
+          setData((prev) => {
+            if (!prev) return prev;
+            const nextKpis = { ...prev.kpis, [kpi]: total } as KPIs;
+            if (kpi === "customers") nextKpis.customersTenantWide = !!result.data.tenantWide;
+            return { ...prev, kpis: nextKpis };
+          });
         }
       }
     } catch {
@@ -669,7 +702,7 @@ const KPI_META: Record<string, { title: string; subtitle: string; columns: { key
     columns: [
       { key: "entryTicket", label: "Entry Ticket" },
       { key: "containerNo", label: "Container #" },
-      { key: "carrier", label: "Carrier" },
+      { key: "customer", label: "Customer Name" },
       { key: "equipmentType", label: "Equipment Type" },
       { key: "status", label: "Status" },
       { key: "spot", label: "Yard Spot" },
