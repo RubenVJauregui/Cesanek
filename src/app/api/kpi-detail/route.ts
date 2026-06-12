@@ -154,11 +154,19 @@ export async function POST(req: NextRequest) {
       }
 
       const nameMap = await resolveCustomerNames(token, customerOrgIds);
-      const rows = results.map((r) => ({
-        ...r,
-        customer: nameMap.get(r._customerId as string) || (r._customerId ? String(r._customerId) : "Unavailable"),
-      }));
-      for (const row of rows) delete (row as Record<string, unknown>)._customerId;
+      const rows = results.map((r) => {
+        const resolved = nameMap.get(r._customerId as string) || (r._customerId ? String(r._customerId) : "Unavailable");
+        return {
+          entryTicket: r.entryTicket,
+          containerNo: r.containerNo,
+          customer: resolved,
+          equipmentType: r.equipmentType,
+          status: r.status,
+          spot: r.spot,
+          checkInTime: r.checkInTime,
+          devanned: r.devanned,
+        };
+      });
 
       return NextResponse.json({ success: true, data: { rows, total: rows.length } });
     }
