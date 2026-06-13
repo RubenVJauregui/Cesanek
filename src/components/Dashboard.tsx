@@ -310,6 +310,12 @@ export default function Dashboard() {
       setAssignStatus((prev) => ({ ...prev, [index]: "Select an assignee" }));
       return;
     }
+    const confirmed = window.confirm(
+      `Assign ${suggestion.orderNo || suggestion.id} to ${assignee.name}?
+
+This will update the existing WISE task for Cesanek if one is ready to assign.`
+    );
+    if (!confirmed) return;
     setAssignStatus((prev) => ({ ...prev, [index]: "Assigning..." }));
     try {
       const res = await fetch("/api/assign-task", {
