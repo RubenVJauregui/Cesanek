@@ -157,6 +157,7 @@ interface SuggestionRow {
   status: string;
   orderType: string;
   suggestedAssignee: string;
+  assigneeId?: string;
   historyCount: number;
   rule: string;
 }
@@ -180,6 +181,8 @@ export default function Dashboard() {
   const [kpiLoading, setKpiLoading] = useState(false);
   const [kpiTenantWide, setKpiTenantWide] = useState(false);
   const [allAssignees, setAllAssignees] = useState<{ userId: string; userName: string; fullName: string }[]>([]);
+  const [rowAssignees, setRowAssignees] = useState<Record<number, string>>({});
+  const [assignStatus, setAssignStatus] = useState<Record<number, string>>({});
 
   const fetchData = useCallback(async () => {
     if (!token) return;
@@ -288,6 +291,57 @@ export default function Dashboard() {
     }
   }
 
+  function selectedAssigneeForRow(index: number, suggestion: SuggestionRow) {
+    const selectedId = rowAssignees[index] || suggestion.assigneeId || allAssignees[index % Math.max(allAssignees.length, 1)]?.userId || "";
+    const selected = allAssignees.find((a) => a.userId === selectedId);
+    return { id: selectedId, name: selected?.fullName || suggestion.suggestedAssignee || "selected assignee" };
+  }
+
+  function isLiveAssignable(suggestion: SuggestionRow) {
+    if (suggestion.workType === "Inbound RN" || suggestion.workType === "In-Yard ET") return true;
+    if (suggestion.workType === "Outbound Order" && suggestion.orderType === "DS") return true;
+    return false;
+  }
+
+  async function handleAssign(index: number, suggestion: SuggestionRow) {
+    if (!token || !isLiveAssignable(suggestion)) return;
+    const assignee = selectedAssigneeForRow(index, suggestion);
+    if (!assignee.id) {
+      setAssignStatus((prev) => ({ ...prev, [index]: "Select an assignee" }));
+      return;
+    }
+    setAssignStatus((prev) => ({ ...prev, [index]: "Assigning..." }));
+    try {
+      const res = await fetch("/api/assign-task", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          token,
+          rowId: suggestion.id || suggestion.orderNo,
+          workType: suggestion.workType,
+          orderType: suggestion.orderType,
+          assigneeId: assignee.id,
+          assigneeName: assignee.name,
+        }),
+      });
+      const result = await res.json().catch(() => ({}));
+      setAssignStatus((prev) => ({
+        ...prev,
+        [index]: res.ok && result.success ? "Assigned" : (result.message || "Not ready to assign"),
+      }));
+    } catch {
+      setAssignStatus((prev) => ({ ...prev, [index]: "Assignment failed" }));
+    }
+  }
+
+  async function handleAutoAssignAll() {
+    for (let i = 0; i < suggestions.length; i++) {
+      if (isLiveAssignable(suggestions[i]) && assignStatus[i] !== "Assigned") {
+        await handleAssign(i, suggestions[i]);
+      }
+    }
+  }
+
   async function handleKpiClick(kpi: string) {
     if (!token) return;
     setKpiModal(kpi);
@@ -392,10 +446,10 @@ export default function Dashboard() {
 
             {/* Auto Assign All button */}
             <div style={{ padding: "14px 24px", borderBottom: "1px solid rgba(135,163,207,.2)", background: "rgba(8,24,43,.72)" }}>
-              <button disabled style={{ background: "#16a34a", color: "#fff", border: "1px solid #15803d", padding: "10px 20px", fontWeight: 900, fontSize: 13, borderRadius: 8, cursor: "not-allowed", opacity: 0.7 }} title="Assignment endpoint not yet verified for this facility">
+              <button onClick={handleAutoAssignAll} style={{ background: "#16a34a", color: "#fff", border: "1px solid #15803d", padding: "10px 20px", fontWeight: 900, fontSize: 13, borderRadius: 8, cursor: "pointer" }}>
                 Auto Assign All
               </button>
-              <span style={{ marginLeft: 12, fontSize: 11, color: "#a8b8d4", fontWeight: 700 }}>Assignment pending endpoint verification</span>
+              <span style={{ marginLeft: 12, fontSize: 11, color: "#86efac", fontWeight: 700 }}>Live rows assign existing tasks only; review rows stay disabled.</span>
             </div>
 
             {/* Table */}
@@ -424,21 +478,24 @@ export default function Dashboard() {
                         </td>
                         <td style={{ padding: "8px 10px", color: "#edf4ff", borderBottom: "1px solid rgba(135,163,207,.15)" }}>{s.orderType}</td>
                         <td style={{ padding: "8px 10px", borderBottom: "1px solid rgba(135,163,207,.15)" }}>
-                          <select disabled style={{ minWidth: 140, border: "1px solid rgba(96,165,250,.55)", borderRadius: 6, background: "rgba(8,24,43,.94)", color: "#f8fbff", padding: "6px 8px", fontWeight: 800, fontSize: 11 }}>
-                            {allAssignees.length > 0 ? (
-                              <>
-                                <option value="">{s.suggestedAssignee || "— Select —"}</option>
-                                {allAssignees.map((a) => (
-                                  <option key={a.userId} value={a.userId}>{a.fullName}</option>
-                                ))}
-                              </>
-                            ) : (
-                              <option>{s.suggestedAssignee || "— Unassigned —"}</option>
-                            )}
+                          <select
+                            value={rowAssignees[i] || s.assigneeId || allAssignees[i % Math.max(allAssignees.length, 1)]?.userId || ""}
+                            onChange={(e) => setRowAssignees((prev) => ({ ...prev, [i]: e.target.value }))}
+                            style={{ minWidth: 140, border: "1px solid rgba(96,165,250,.55)", borderRadius: 6, background: "rgba(8,24,43,.94)", color: "#f8fbff", padding: "6px 8px", fontWeight: 800, fontSize: 11 }}
+                          >
+                            {allAssignees.length > 0 ? allAssignees.map((a) => (
+                              <option key={a.userId} value={a.userId}>{a.fullName}</option>
+                            )) : <option value="">{s.suggestedAssignee || "No assignees loaded"}</option>}
                           </select>
                         </td>
                         <td style={{ padding: "8px 10px", borderBottom: "1px solid rgba(135,163,207,.15)" }}>
-                          <button disabled style={{ background: "#16a34a", border: "1px solid #15803d", color: "#fff", padding: "5px 12px", fontWeight: 800, fontSize: 11, borderRadius: 6, cursor: "not-allowed", opacity: 0.7 }}>Assign</button>
+                          {assignStatus[i] ? (
+                            <span style={{ color: assignStatus[i] === "Assigned" ? "#86efac" : assignStatus[i] === "Assigning..." ? "#a8c4ff" : "#fca5a5", fontSize: 10, fontWeight: 800 }} title={assignStatus[i]}>{assignStatus[i]}</span>
+                          ) : isLiveAssignable(s) ? (
+                            <button onClick={() => handleAssign(i, s)} style={{ background: "#16a34a", border: "1px solid #15803d", color: "#fff", padding: "5px 12px", fontWeight: 800, fontSize: 11, borderRadius: 6, cursor: "pointer" }}>Assign</button>
+                          ) : (
+                            <button disabled style={{ background: "rgba(71,96,138,.5)", border: "1px solid rgba(135,163,207,.3)", color: "#fff", padding: "5px 12px", fontWeight: 800, fontSize: 11, borderRadius: 6, cursor: "not-allowed", opacity: 0.8 }}>Review</button>
+                          )}
                         </td>
                         <td style={{ padding: "8px 10px", color: "#edf4ff", borderBottom: "1px solid rgba(135,163,207,.15)", textAlign: "center" }}>{s.historyCount}</td>
                         <td style={{ padding: "8px 10px", color: "#a8b8d4", borderBottom: "1px solid rgba(135,163,207,.15)", fontSize: 10, fontWeight: 700 }}>{s.rule}</td>
